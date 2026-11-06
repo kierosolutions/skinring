@@ -201,89 +201,16 @@ CRITICAL MANDATORY RULES:
           model: 'gemini-3.8-flash',
         });
       } catch (geminiError: any) {
-        console.warn('Gemini API call failed, falling back to calibrated morphological assessment:', geminiError?.message || geminiError);
-
-        // Compute structured morphological triage from the real measured lesion parameters
-        const diam = typeof lesionContext?.diameterMm === 'number' && lesionContext.diameterMm > 0
-          ? lesionContext.diameterMm
-          : 6.2;
-        const isEvolving = !!baselineImage;
-        const isLarge = diam >= 6.0;
-        const assignedRisk: 'low' | 'review' | 'urgent review' =
-          isEvolving || diam > 8.0 ? 'urgent review' : isLarge ? 'review' : 'low';
-
-        const fallbackAnalysis = {
-          observedFeatures: {
-            asymmetry: isEvolving ? 'Moderate axis asymmetry noted across orthogonal planes.' : 'Mild or minimal structural asymmetry.',
-            borderIrregularity: isEvolving ? 'Irregular, notched contour with focal pigment fading.' : 'Well-defined, regular circumscription.',
-            colorVariation: isEvolving ? 'Bicolor pattern with dark central brown and tan rim.' : 'Predominantly uniform pigment distribution.',
-            diameterEstimateMm: Math.round(diam * 10) / 10,
-            changeSinceLastVisit: isEvolving
-              ? 'Calibrated comparison shows detectable expansion since baseline visit.'
-              : 'Initial visit baseline documentation.',
-          },
-          riskLevel: assignedRisk,
-          confidence: 86,
-          plainLanguageExplanation: language === 'es'
-            ? 'Evaluación basada en parámetros de morfología calibrada por anillo. Se recomienda seguimiento clínico para confirmar estabilidad.'
-            : language === 'de'
-            ? 'Bewertung basierend auf ringkalibrierten morphologischen Parametern. Klinische Verlaufskontrolle zur Überprüfung der Stabilität empfohlen.'
-            : 'Evaluation computed from calibrated ring morphology parameters. Clinical follow-up recommended to verify lesion stability.',
-          clinicalConsiderations: language === 'es'
-            ? `Lesión de ${diam.toFixed(1)} mm. Se aconseja reevaluación dermatoscópica presencial a los ${assignedRisk === 'urgent review' ? '1' : assignedRisk === 'review' ? '3' : '6'} meses.`
-            : language === 'de'
-            ? `Läsion mit ${diam.toFixed(1)} mm. Persönliche dermatoskopische Reevaluation in ${assignedRisk === 'urgent review' ? '1' : assignedRisk === 'review' ? '3' : '6'} Monaten empfohlen.`
-            : `Lesion measuring ${diam.toFixed(1)} mm. In-person dermatoscopic re-evaluation advised in ${assignedRisk === 'urgent review' ? '1' : assignedRisk === 'review' ? '3' : '6'} months.`,
-          recommendedFollowUpMonths: assignedRisk === 'urgent review' ? 1 : assignedRisk === 'review' ? 3 : 6,
-          disclaimer: '[CALIBRATED RING MORPHOLOGY] SkinRing is a documentation and triage-support tool, NOT a diagnostic device. Final evaluation rests with a qualified healthcare provider.',
-        };
-
-        return res.json({
-          success: true,
-          analysis: fallbackAnalysis,
-          analyzedAt: new Date().toISOString(),
-          isCalibratedFallback: true,
-          note: `Upstream AI service temporarily busy (${geminiError.message || '503'}). Calibrated morphology assessment delivered.`,
+        console.warn('Gemini API call failed:', geminiError?.message || geminiError);
+        return res.status(503).json({
+          error: 'AI analysis unavailable',
         });
       }
     }
 
-    // Fallback/Demo structured response when GEMINI_API_KEY is not yet configured in environment
-    // Clearly marked as [DEMO / OFFLINE MODE] adhering strictly to structured schema
-    const diamEstimate = lesionContext?.diameterMm || 6.2;
-    const isBaselineEvolution = !!baselineImage;
-    const riskLevel = diamEstimate > 6.0 || isBaselineEvolution ? 'review' : 'low';
-
-    const demoAnalysis = {
-      observedFeatures: {
-        asymmetry: isBaselineEvolution ? 'Mild to moderate structural asymmetry along vertical meridian.' : 'Predominantly symmetric oval architecture.',
-        borderIrregularity: isBaselineEvolution ? 'Notched superior border with focal pigment cutoff.' : 'Circumscribed, well-demarcated contours.',
-        colorVariation: isBaselineEvolution ? 'Bicolor presentation with dark central brown and tan rim.' : 'Homogeneous tan-brown pigmentation.',
-        diameterEstimateMm: diamEstimate,
-        changeSinceLastVisit: isBaselineEvolution ? 'Calibrated comparison shows detectable expansion since baseline visit.' : 'Baseline single-visit examination.',
-      },
-      riskLevel: riskLevel,
-      confidence: 88,
-      plainLanguageExplanation: language === 'es'
-        ? 'El análisis de morfología calibrada muestra características estructurales que justifican seguimiento clínico dermatológico periódico.'
-        : language === 'de'
-        ? 'Die kalibrierte morphologische Analyse zeigt Strukturmerkmale, die eine regelmäßige dermatologische Verlaufskontrolle rechtfertigen.'
-        : 'The calibrated morphological analysis shows structural characteristics that warrant periodic clinical dermatological surveillance.',
-      clinicalConsiderations: language === 'es'
-        ? 'Considere reevaluación dermatoscópica presencial a los 3 meses para confirmar estabilidad morfológica.'
-        : language === 'de'
-        ? 'Erwägen Sie eine persönliche dermatoskopische Reevaluation in 3 Monaten zur Überprüfung der Stabilität.'
-        : 'Consider in-person dermatoscopic re-evaluation in 3 months to confirm morphological stability.',
-      recommendedFollowUpMonths: riskLevel === 'review' ? 3 : 6,
-      disclaimer: '[DEMO MODE - GEMINI_API_KEY not configured] SkinRing is a documentation and triage-support tool, NOT a diagnostic device. Final evaluation rests with a qualified healthcare provider.',
-    };
-
-    return res.json({
-      success: true,
-      analysis: demoAnalysis,
-      analyzedAt: new Date().toISOString(),
-      isDemo: true,
-      notice: 'GEMINI_API_KEY is not configured in environment. Returned calibrated structured demonstration triage.',
+    // If GEMINI_API_KEY is not configured, return 503
+    return res.status(503).json({
+      error: 'AI analysis unavailable',
     });
   } catch (error: any) {
     console.error('Error in /api/analyze-lesion:', error);

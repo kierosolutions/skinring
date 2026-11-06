@@ -314,6 +314,12 @@ export const LesionDetail: React.FC<LesionDetailProps> = ({
                         </span>
                       )}
 
+                      {typeof photo.circularityScore === 'number' && (
+                        <span className="px-2.5 py-1 rounded-xl bg-slate-800 text-slate-100 font-bold border border-slate-700">
+                          Circularity: {photo.circularityScore.toFixed(2)}
+                        </span>
+                      )}
+
                       {typeof photo.borderIrregularityScore === 'number' && (
                         <span className="px-2.5 py-1 rounded-xl bg-slate-800 text-slate-100 font-bold border border-slate-700">
                           Border Irreg: {photo.borderIrregularityScore.toFixed(2)}

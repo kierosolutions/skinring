@@ -49,12 +49,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   );
 
   const [userName, setUserName] = useState<string>(
-    settings.userProfile?.name || settings.providerName?.split(',')[0] || 'Dr. Sarah Lin'
+    settings.userProfile?.name || settings.providerName?.split(',')[0] || ''
   );
   const [userRole, setUserRole] = useState<string>(
-    settings.userProfile?.role || 'MD (Dermatology)'
+    settings.userProfile?.role || ''
   );
-  const [clinicName, setClinicName] = useState<string>(settings.clinicName);
+  const [clinicName, setClinicName] = useState<string>(settings.clinicName || 'Rural Health & Tele-Derm Network');
   const [isSaved, setIsSaved] = useState<boolean>(false);
 
   const handleSave = () => {
@@ -67,13 +67,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     };
 
     const userProfile = {
-      name: userName.trim() || 'Healthcare Clinician',
-      role: userRole.trim() || 'Medical Provider',
+      name: userName.trim(),
+      role: userRole.trim(),
     };
 
     onUpdateSettings({
       ...settings,
-      providerName: `${userProfile.name}, ${userProfile.role}`,
+      providerName: userProfile.name ? (userProfile.role ? `${userProfile.name}, ${userProfile.role}` : userProfile.name) : '',
       clinicName,
       userProfile,
       ringSettings: updatedRing,

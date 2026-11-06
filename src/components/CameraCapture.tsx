@@ -354,6 +354,7 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
           lesionDetected: false,
           lesionDiameterMm: null,
           lesionAreaMm2: null,
+          circularityScore: null,
           borderIrregularityScore: null,
           contourPoints: [],
         };
@@ -372,10 +373,12 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
     // Tamper-evident SHA-256 hash of the final calibrated image
     const sha256 = await calculateSha256(processedDataUrl);
 
-    // Use clinician profile from settings (NO hardcoded names!)
-    const clinicianName = settings.userProfile?.name?.trim() || settings.providerName?.split(',')[0]?.trim() || 'Clinician';
-    const clinicianRole = settings.userProfile?.role?.trim() || 'Healthcare Provider';
-    const capturedByString = `${clinicianName}, ${clinicianRole}`;
+    // Use clinician profile from settings (or Demo User if sample demo)
+    const clinicianName = isSampleDemo
+      ? 'Demo User'
+      : settings.userProfile?.name?.trim() || settings.providerName?.split(',')[0]?.trim() || 'Clinician';
+    const clinicianRole = isSampleDemo ? '' : settings.userProfile?.role?.trim();
+    const capturedByString = clinicianRole ? `${clinicianName}, ${clinicianRole}` : clinicianName;
 
     const newPhoto: LesionPhoto = {
       id: 'photo-' + Date.now(),
@@ -395,9 +398,9 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
       colorReferenceNormalized: cvResult.colorReferenceNormalized,
       colorNormalizationFactors: cvResult.colorCorrectionFactors,
       glareDetected: cvResult.glareDetected,
-      // Measured lesion maximum diameter, area, and border irregularity from Otsu segmentation
       diameterMmEstimate: cvResult.lesionDiameterMm,
       measuredAreaMm2: cvResult.lesionAreaMm2,
+      circularityScore: cvResult.circularityScore,
       borderIrregularityScore: cvResult.borderIrregularityScore,
       contourPoints: cvResult.contourPoints,
       isDemo: isSampleDemo,
@@ -532,8 +535,8 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
                 <div>
                   <span className="text-slate-400 block font-medium">Circularity / Irreg:</span>
                   <span className="text-white font-bold">
-                    {capturedPhoto.borderIrregularityScore !== null && capturedPhoto.borderIrregularityScore !== undefined
-                      ? `${capturedPhoto.borderIrregularityScore.toFixed(2)}`
+                    {capturedPhoto.circularityScore !== null && capturedPhoto.circularityScore !== undefined && capturedPhoto.borderIrregularityScore !== null && capturedPhoto.borderIrregularityScore !== undefined
+                      ? `${capturedPhoto.circularityScore.toFixed(2)} / ${capturedPhoto.borderIrregularityScore.toFixed(2)}`
                       : 'Not measured'}
                   </span>
                 </div>

@@ -23,8 +23,37 @@ export interface RingDetectionResult {
   lesionDetected: boolean;
   lesionDiameterMm: number | null;
   lesionAreaMm2: number | null;
-  borderIrregularityScore: number | null; // Circularity metric (1.0 = perfect circle, >1.4 = irregular)
+  circularityScore: number | null; // 4 * PI * Area / Perimeter^2
+  borderIrregularityScore: number | null; // 1 - circularity
   contourPoints: { x: number; y: number }[]; // 0..1 normalized coordinates
+}
+
+/**
+ * Standard CIE L*a*b* conversion from sRGB
+ */
+function rgbToLab(r: number, g: number, b: number): [number, number, number] {
+  const rNorm = r / 255;
+  const gNorm = g / 255;
+  const bNorm = b / 255;
+
+  const rLin = rNorm > 0.04045 ? Math.pow((rNorm + 0.055) / 1.055, 2.4) : rNorm / 12.92;
+  const gLin = gNorm > 0.04045 ? Math.pow((gNorm + 0.055) / 1.055, 2.4) : gNorm / 12.92;
+  const bLin = bNorm > 0.04045 ? Math.pow((bNorm + 0.055) / 1.055, 2.4) : bNorm / 12.92;
+
+  const X = (rLin * 0.4124564 + gLin * 0.3575761 + bLin * 0.1804375) / 0.95047;
+  const Y = (rLin * 0.2126729 + gLin * 0.7151522 + bLin * 0.0721750) / 1.00000;
+  const Z = (rLin * 0.0193339 + gLin * 0.1191920 + bLin * 0.9503041) / 1.08883;
+
+  const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const fx = f(X);
+  const fy = f(Y);
+  const fz = f(Z);
+
+  const L = 116 * fy - 16;
+  const a = 500 * (fx - fy);
+  const bVal = 200 * (fy - fz);
+
+  return [L, a, bVal];
 }
 
 /**
@@ -306,201 +335,329 @@ export function analyzeRingAndLesion(
     }
   }
 
-  // 5. Real Lesion Segmentation inside Ring (Otsu Threshold + Connected Component)
-  const innerRadius = bestRadius * 0.82;
-  const lesionPixels: boolean[] = new Array(procSize * procSize).fill(false);
-  const innerMaskIndices: number[] = [];
+  // 5. Real Lesion Segmentation in Lab Color Space
+  // Precompute Lab color for all pixels
+  const labL = new Float32Array(procSize * procSize);
+  const labA = new Float32Array(procSize * procSize);
+  const labB = new Float32Array(procSize * procSize);
 
-  // Compute Otsu threshold on the inner skin region
-  const histogram = new Uint32Array(256);
-  let innerCount = 0;
+  for (let y = 0; y < procSize; y++) {
+    for (let x = 0; x < procSize; x++) {
+      const pIdx = y * procSize + x;
+      const idx4 = pIdx * 4;
+      const [l, a, b] = rgbToLab(data[idx4], data[idx4 + 1], data[idx4 + 2]);
+      labL[pIdx] = l;
+      labA[pIdx] = a;
+      labB[pIdx] = b;
+    }
+  }
+
+  // Sample skin ring just inside the SkinRing inner rim
+  const skinRInner = bestRadius * 0.72;
+  const skinROuter = bestRadius * 0.88;
+  const skinLList: number[] = [];
+  const skinAList: number[] = [];
+  const skinBList: number[] = [];
 
   for (let y = 0; y < procSize; y++) {
     for (let x = 0; x < procSize; x++) {
       const dx = x - bestCenter.x;
       const dy = y - bestCenter.y;
-      if (dx * dx + dy * dy < innerRadius * innerRadius) {
-        const luma = Math.round(gray[y * procSize + x]);
-        histogram[luma]++;
-        innerMaskIndices.push(y * procSize + x);
-        innerCount++;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist >= skinRInner && dist <= skinROuter) {
+        const pIdx = y * procSize + x;
+        skinLList.push(labL[pIdx]);
+        skinAList.push(labA[pIdx]);
+        skinBList.push(labB[pIdx]);
       }
     }
   }
 
-  // Otsu algorithm
-  let otsuThreshold = 100;
-  if (innerCount > 100) {
-    let sum = 0;
-    for (let t = 0; t < 256; t++) sum += t * histogram[t];
+  skinLList.sort((a, b) => a - b);
+  skinAList.sort((a, b) => a - b);
+  skinBList.sort((a, b) => a - b);
+  const skinL = skinLList[Math.floor(skinLList.length / 2)] ?? 70;
+  const skinA = skinAList[Math.floor(skinAList.length / 2)] ?? 15;
+  const skinB = skinBList[Math.floor(skinBList.length / 2)] ?? 20;
 
-    let sumB = 0;
-    let wB = 0;
-    let wF = 0;
-    let maxVar = -1;
+  // Compute color distance deltaE in Lab against surrounding skin
+  const innerRadius = bestRadius * 0.88;
+  const innerIndices: number[] = [];
+  const deltaEValues = new Float32Array(procSize * procSize);
+  let maxDeltaE = 0;
 
-    for (let t = 0; t < 256; t++) {
-      wB += histogram[t];
-      if (wB === 0) continue;
-      wF = innerCount - wB;
-      if (wF === 0) break;
-
-      sumB += t * histogram[t];
-      const mB = sumB / wB;
-      const mF = (sum - sumB) / wF;
-      const betweenVar = wB * wF * Math.pow(mB - mF, 2);
-
-      if (betweenVar > maxVar) {
-        maxVar = betweenVar;
-        otsuThreshold = t;
+  for (let y = 0; y < procSize; y++) {
+    for (let x = 0; x < procSize; x++) {
+      const dx = x - bestCenter.x;
+      const dy = y - bestCenter.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < innerRadius) {
+        const pIdx = y * procSize + x;
+        const dL = labL[pIdx] - skinL;
+        const da = labA[pIdx] - skinA;
+        const db = labB[pIdx] - skinB;
+        const dE = Math.sqrt(dL * dL + da * da + db * db);
+        deltaEValues[pIdx] = dE;
+        if (dE > maxDeltaE) maxDeltaE = dE;
+        innerIndices.push(pIdx);
       }
     }
   }
 
-  // Pigmented lesions are darker than surrounding skin
-  // A pixel is segmented as lesion if its luminance < otsuThreshold - margin
-  for (const idx of innerMaskIndices) {
-    if (gray[idx] < otsuThreshold - 4) {
-      lesionPixels[idx] = true;
+  // Otsu algorithm on color distance histogram
+  const numBins = 256;
+  const hist = new Uint32Array(numBins);
+  const scaleFactor = maxDeltaE > 0 ? (numBins - 1) / maxDeltaE : 1;
+
+  for (const pIdx of innerIndices) {
+    const bin = Math.min(numBins - 1, Math.max(0, Math.round(deltaEValues[pIdx] * scaleFactor)));
+    hist[bin]++;
+  }
+
+  const totalInner = innerIndices.length;
+  let sumTotal = 0;
+  for (let i = 0; i < numBins; i++) sumTotal += i * hist[i];
+
+  let sumB = 0;
+  let wB = 0;
+  let maxBetweenVar = -1;
+  let bestBin = Math.round(numBins * 0.2);
+
+  for (let t = 0; t < numBins; t++) {
+    wB += hist[t];
+    if (wB === 0) continue;
+    const wF = totalInner - wB;
+    if (wF === 0) break;
+
+    sumB += t * hist[t];
+    const mB = sumB / wB;
+    const mF = (sumTotal - sumB) / wF;
+    const betweenVar = wB * wF * Math.pow(mB - mF, 2);
+
+    if (betweenVar > maxBetweenVar) {
+      maxBetweenVar = betweenVar;
+      bestBin = t;
     }
   }
 
-  // Find connected components in lesionPixels (BFS)
-  const visited = new Uint8Array(procSize * procSize);
-  let bestComponent: { x: number; y: number }[] = [];
-  let bestCompDistToCenter = 999999;
+  const otsuThresholdDeltaE = maxDeltaE > 0 ? bestBin / scaleFactor : 10;
+  const initialMask = new Uint8Array(procSize * procSize);
+  for (const pIdx of innerIndices) {
+    if (deltaEValues[pIdx] >= otsuThresholdDeltaE) {
+      initialMask[pIdx] = 1;
+    }
+  }
 
-  for (const idx of innerMaskIndices) {
-    if (lesionPixels[idx] && !visited[idx]) {
-      const component: { x: number; y: number }[] = [];
-      const queue: number[] = [idx];
-      visited[idx] = 1;
+  // Morphological Closing (Dilation then Erosion)
+  const dilated = new Uint8Array(procSize * procSize);
+  for (let y = 1; y < procSize - 1; y++) {
+    for (let x = 1; x < procSize - 1; x++) {
+      const pIdx = y * procSize + x;
+      if (
+        initialMask[pIdx] ||
+        initialMask[pIdx - 1] || initialMask[pIdx + 1] ||
+        initialMask[pIdx - procSize] || initialMask[pIdx + procSize] ||
+        initialMask[pIdx - procSize - 1] || initialMask[pIdx - procSize + 1] ||
+        initialMask[pIdx + procSize - 1] || initialMask[pIdx + procSize + 1]
+      ) {
+        dilated[pIdx] = 1;
+      }
+    }
+  }
 
-      let compSumX = 0;
-      let compSumY = 0;
+  const closed = new Uint8Array(procSize * procSize);
+  for (let y = 1; y < procSize - 1; y++) {
+    for (let x = 1; x < procSize - 1; x++) {
+      const pIdx = y * procSize + x;
+      if (
+        dilated[pIdx] &&
+        dilated[pIdx - 1] && dilated[pIdx + 1] &&
+        dilated[pIdx - procSize] && dilated[pIdx + procSize] &&
+        dilated[pIdx - procSize - 1] && dilated[pIdx - procSize + 1] &&
+        dilated[pIdx + procSize - 1] && dilated[pIdx + procSize + 1]
+      ) {
+        closed[pIdx] = 1;
+      }
+    }
+  }
 
-      while (queue.length > 0) {
-        const curr = queue.pop()!;
-        const cy = Math.floor(curr / procSize);
+  // Fill holes inside inner radius
+  const outerReach = new Uint8Array(procSize * procSize);
+  const floodQueue: number[] = [];
+
+  for (let y = 0; y < procSize; y++) {
+    for (let x = 0; x < procSize; x++) {
+      const dx = x - bestCenter.x;
+      const dy = y - bestCenter.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const pIdx = y * procSize + x;
+      if (dist >= innerRadius - 2) {
+        outerReach[pIdx] = 1;
+        floodQueue.push(pIdx);
+      }
+    }
+  }
+
+  let head = 0;
+  while (head < floodQueue.length) {
+    const curr = floodQueue[head++];
+    const neighbors = [curr - 1, curr + 1, curr - procSize, curr + procSize];
+    for (const n of neighbors) {
+      if (n >= 0 && n < procSize * procSize && !outerReach[n] && !closed[n]) {
+        outerReach[n] = 1;
+        floodQueue.push(n);
+      }
+    }
+  }
+
+  const filledMask = new Uint8Array(closed);
+  for (const pIdx of innerIndices) {
+    if (!outerReach[pIdx]) {
+      filledMask[pIdx] = 1;
+    }
+  }
+
+  // Connected components: Keep largest connected component that touches the image center
+  const visitedComp = new Uint8Array(procSize * procSize);
+  const touchingComponents: { pixels: number[]; count: number }[] = [];
+  const allComponents: { pixels: number[]; count: number; distToCenter: number }[] = [];
+  const centerRadius = procSize * 0.12;
+
+  for (const pIdx of innerIndices) {
+    if (filledMask[pIdx] && !visitedComp[pIdx]) {
+      const compPixels: number[] = [];
+      const q: number[] = [pIdx];
+      visitedComp[pIdx] = 1;
+      let touchesCenter = false;
+      let minDistToCenter = 999999;
+
+      while (q.length > 0) {
+        const curr = q.pop()!;
+        compPixels.push(curr);
         const cx = curr % procSize;
-        component.push({ x: cx, y: cy });
-        compSumX += cx;
-        compSumY += cy;
+        const cy = Math.floor(curr / procSize);
+        const dCenter = Math.hypot(cx - bestCenter.x, cy - bestCenter.y);
+        if (dCenter < minDistToCenter) minDistToCenter = dCenter;
+        if (dCenter <= centerRadius) touchesCenter = true;
 
-        // 4-neighborhood
-        const neighbors = [
-          curr - 1,
-          curr + 1,
-          curr - procSize,
-          curr + procSize,
-        ];
-
-        for (const n of neighbors) {
-          if (n >= 0 && n < procSize * procSize && lesionPixels[n] && !visited[n]) {
-            visited[n] = 1;
-            queue.push(n);
+        const nbs = [curr - 1, curr + 1, curr - procSize, curr + procSize];
+        for (const n of nbs) {
+          if (n >= 0 && n < procSize * procSize && filledMask[n] && !visitedComp[n]) {
+            visitedComp[n] = 1;
+            q.push(n);
           }
         }
       }
 
-      if (component.length >= 25) {
-        // Evaluate distance from component centroid to center
-        const compCx = compSumX / component.length;
-        const compCy = compSumY / component.length;
-        const dist = Math.sqrt(
-          Math.pow(compCx - bestCenter.x, 2) + Math.pow(compCy - bestCenter.y, 2)
-        );
-
-        if (dist < bestCompDistToCenter) {
-          bestCompDistToCenter = dist;
-          bestComponent = component;
+      if (compPixels.length >= 25) {
+        allComponents.push({ pixels: compPixels, count: compPixels.length, distToCenter: minDistToCenter });
+        if (touchesCenter) {
+          touchingComponents.push({ pixels: compPixels, count: compPixels.length });
         }
       }
     }
   }
 
-  const lesionDetected = bestComponent.length >= 25;
+  let selectedPixels: number[] = [];
+  if (touchingComponents.length > 0) {
+    touchingComponents.sort((a, b) => b.count - a.count);
+    selectedPixels = touchingComponents[0].pixels;
+  } else if (allComponents.length > 0) {
+    allComponents.sort((a, b) => a.distToCenter - b.distToCenter);
+    selectedPixels = allComponents[0].pixels;
+  }
+
+  const lesionDetected = selectedPixels.length >= 25;
   let lesionDiameterMm: number | null = null;
   let lesionAreaMm2: number | null = null;
+  let circularityScore: number | null = null;
   let borderIrregularityScore: number | null = null;
   const contourPointsNormalized: { x: number; y: number }[] = [];
 
   if (lesionDetected) {
-    // 1. Compute exact Area in mm²
-    const pixelAreaActual = bestComponent.length * Math.pow(scaleToSource, 2);
-    lesionAreaMm2 = Math.round(pixelAreaActual * Math.pow(mmPerPixel, 2) * 10) / 10;
-
-    // 2. Find boundary contour points
-    const compSet = new Set<number>();
-    for (const p of bestComponent) compSet.add(p.y * procSize + p.x);
-
+    const pixelSet = new Set<number>(selectedPixels);
     const boundaryPoints: { x: number; y: number }[] = [];
-    for (const p of bestComponent) {
-      const idx = p.y * procSize + p.x;
-      // Border if any neighbor is not in component
+
+    for (const p of selectedPixels) {
+      const px = p % procSize;
+      const py = Math.floor(p / procSize);
       if (
-        !compSet.has(idx - 1) ||
-        !compSet.has(idx + 1) ||
-        !compSet.has(idx - procSize) ||
-        !compSet.has(idx + procSize)
+        !pixelSet.has(p - 1) ||
+        !pixelSet.has(p + 1) ||
+        !pixelSet.has(p - procSize) ||
+        !pixelSet.has(p + procSize)
       ) {
-        boundaryPoints.push(p);
+        boundaryPoints.push({ x: px, y: py });
       }
     }
 
-    // 3. Maximum Feret Diameter (max distance between any two contour points)
-    let maxDistPx = 0;
-    // Subsample boundary points if large to calculate max pairwise distance efficiently
-    const step = Math.max(1, Math.floor(boundaryPoints.length / 80));
-    const sampleBoundary: { x: number; y: number }[] = [];
-    for (let i = 0; i < boundaryPoints.length; i += step) {
-      sampleBoundary.push(boundaryPoints[i]);
-    }
-
-    for (let i = 0; i < sampleBoundary.length; i++) {
-      for (let j = i + 1; j < sampleBoundary.length; j++) {
-        const dx = sampleBoundary[i].x - sampleBoundary[j].x;
-        const dy = sampleBoundary[i].y - sampleBoundary[j].y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > maxDistPx) maxDistPx = dist;
-      }
-    }
-
-    const actualDiameterPx = maxDistPx * scaleToSource;
-    lesionDiameterMm = Math.round(actualDiameterPx * mmPerPixel * 10) / 10;
-
-    // 4. Border Irregularity (Perimeter² / (4π * Area))
-    // Smooth circle = 1.0; irregular/notched border = 1.3 - 2.5+
-    const perimeterPx = boundaryPoints.length * scaleToSource;
-    const circularity = Math.pow(perimeterPx, 2) / (4 * Math.PI * Math.max(1, pixelAreaActual));
-    borderIrregularityScore = Math.round(Math.max(1.0, circularity) * 100) / 100;
-
-    // 5. Store angularly-ordered contour points for crisp review drawing
     // Centroid of boundary
     let bCx = 0;
     let bCy = 0;
-    for (const p of boundaryPoints) {
-      bCx += p.x;
-      bCy += p.y;
+    for (const bp of boundaryPoints) {
+      bCx += bp.x;
+      bCy += bp.y;
     }
     bCx /= Math.max(1, boundaryPoints.length);
     bCy /= Math.max(1, boundaryPoints.length);
 
-    // Sort by angle around centroid
-    const angularBoundary = boundaryPoints
+    // Sort by angle around centroid to form a continuous traced boundary chain
+    const orderedContour = boundaryPoints
       .map((p) => ({
-        x: p.x / procSize,
-        y: p.y / procSize,
+        x: p.x,
+        y: p.y,
         angle: Math.atan2(p.y - bCy, p.x - bCx),
       }))
       .sort((a, b) => a.angle - b.angle);
 
-    // Keep 36 points for smooth SVG polygon rendering
-    const pointStep = Math.max(1, Math.floor(angularBoundary.length / 36));
-    for (let i = 0; i < angularBoundary.length; i += pointStep) {
+    // Compute perimeter from the real contour (sum of Euclidean distances between successive boundary points)
+    let perimeterProc = 0;
+    const N = orderedContour.length;
+    for (let i = 0; i < N; i++) {
+      const p1 = orderedContour[i];
+      const p2 = orderedContour[(i + 1) % N];
+      perimeterProc += Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    }
+
+    const perimeterActual = perimeterProc * scaleToSource;
+    const areaActual = selectedPixels.length * Math.pow(scaleToSource, 2);
+
+    // Exact area in mm²
+    lesionAreaMm2 = Math.round(areaActual * Math.pow(mmPerPixel, 2) * 10) / 10;
+
+    // Circularity = 4 * PI * Area / Perimeter^2
+    const rawCircularity = (4 * Math.PI * areaActual) / Math.pow(perimeterActual, 2);
+    const clampedCircularity = Math.min(1.0, Math.max(0.01, rawCircularity));
+    circularityScore = Math.round(clampedCircularity * 100) / 100;
+
+    // Border irregularity = 1 - circularity
+    const rawBorderIrreg = 1 - clampedCircularity;
+    borderIrregularityScore = Math.round(Math.max(0, rawBorderIrreg) * 100) / 100;
+
+    // Max Feret Diameter of that contour in mm (using measured mm/px)
+    let maxFeretPx = 0;
+    const feretStep = Math.max(1, Math.floor(boundaryPoints.length / 100));
+    const feretSamples: { x: number; y: number }[] = [];
+    for (let i = 0; i < boundaryPoints.length; i += feretStep) {
+      feretSamples.push(boundaryPoints[i]);
+    }
+
+    for (let i = 0; i < feretSamples.length; i++) {
+      for (let j = i + 1; j < feretSamples.length; j++) {
+        const d = Math.hypot(feretSamples[i].x - feretSamples[j].x, feretSamples[i].y - feretSamples[j].y);
+        if (d > maxFeretPx) maxFeretPx = d;
+      }
+    }
+
+    const maxFeretSourcePx = maxFeretPx * scaleToSource;
+    lesionDiameterMm = Math.round(maxFeretSourcePx * mmPerPixel * 10) / 10;
+
+    // Store 40 normalized contour points for SVG rendering
+    const pointStep = Math.max(1, Math.floor(orderedContour.length / 40));
+    for (let i = 0; i < orderedContour.length; i += pointStep) {
       contourPointsNormalized.push({
-        x: Math.round(angularBoundary[i].x * 1000) / 1000,
-        y: Math.round(angularBoundary[i].y * 1000) / 1000,
+        x: Math.round((orderedContour[i].x / procSize) * 1000) / 1000,
+        y: Math.round((orderedContour[i].y / procSize) * 1000) / 1000,
       });
     }
   }
@@ -523,6 +680,7 @@ export function analyzeRingAndLesion(
     lesionDetected,
     lesionDiameterMm,
     lesionAreaMm2,
+    circularityScore,
     borderIrregularityScore,
     contourPoints: contourPointsNormalized,
   };
@@ -546,6 +704,7 @@ function createEmptyResult(): RingDetectionResult {
     lesionDetected: false,
     lesionDiameterMm: null,
     lesionAreaMm2: null,
+    circularityScore: null,
     borderIrregularityScore: null,
     contourPoints: [],
   };

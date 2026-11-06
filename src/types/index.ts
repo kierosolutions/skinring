@@ -108,6 +108,7 @@ export interface LesionPhoto {
   glareDetected: boolean;
   diameterMmEstimate: number | null;
   measuredAreaMm2?: number | null;
+  circularityScore?: number | null;
   borderIrregularityScore?: number | null;
   contourPoints?: { x: number; y: number }[];
   isDemo?: boolean;

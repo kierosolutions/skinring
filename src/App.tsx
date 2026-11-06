@@ -41,6 +41,7 @@ import { AIAnalysisModal } from './components/AIAnalysisModal';
 import { UglyDucklingView } from './components/UglyDucklingView';
 import { RemindersView } from './components/RemindersView';
 import { SettingsView } from './components/SettingsView';
+import { UserProfileModal } from './components/UserProfileModal';
 import { getTranslation } from './i18n/translations';
 
 export default function App() {
@@ -59,6 +60,7 @@ export default function App() {
 
   // Modals & Subflows
   const [showFirstLaunchDisclaimer, setShowFirstLaunchDisclaimer] = useState<boolean>(false);
+  const [showProfileSetup, setShowProfileSetup] = useState<boolean>(false);
   const [showCameraPermissionNotice, setShowCameraPermissionNotice] = useState<boolean>(false);
   const [showChangeComparison, setShowChangeComparison] = useState<boolean>(false);
   const [showChecklistsModal, setShowChecklistsModal] = useState<boolean>(false);
@@ -79,6 +81,8 @@ export default function App() {
         // Show first-launch non-diagnostic disclaimer if not previously acknowledged
         if (!loadedSettings.hasSeenDisclaimer) {
           setShowFirstLaunchDisclaimer(true);
+        } else if (!loadedSettings.userProfile?.name) {
+          setShowProfileSetup(true);
         }
 
         const loadedPatients = await getPatients();
@@ -122,6 +126,20 @@ export default function App() {
     setSettings(updated);
     await saveSettings(updated);
     setShowFirstLaunchDisclaimer(false);
+    if (!updated.userProfile?.name) {
+      setShowProfileSetup(true);
+    }
+  };
+
+  const handleSaveProfileSetup = async (profile: { name: string; role: string }) => {
+    const updated: AppSettings = {
+      ...settings,
+      userProfile: profile,
+      providerName: profile.name + (profile.role ? `, ${profile.role}` : ''),
+    };
+    setSettings(updated);
+    await saveSettings(updated);
+    setShowProfileSetup(false);
   };
 
   // Handle Camera Permission Screen
@@ -580,6 +598,15 @@ export default function App() {
         <DisclaimerModal
           language={settings.language}
           onAccept={handleAcceptDisclaimer}
+        />
+      )}
+
+      {/* First-Launch Clinician Profile Setup Modal */}
+      {showProfileSetup && (
+        <UserProfileModal
+          language={settings.language}
+          initialProfile={settings.userProfile}
+          onSave={handleSaveProfileSetup}
         />
       )}
 

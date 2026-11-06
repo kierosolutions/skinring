@@ -71,40 +71,42 @@ export const AIAnalysisModal: React.FC<AIAnalysisModalProps> = ({
           body: JSON.stringify(payload),
         });
       } catch (netErr: any) {
-        throw new Error('Server is unreachable. Please verify your connection or dev server status.');
+        throw new Error('AI analysis not available – no result');
+      }
+
+      if (!response.ok || response.status === 503) {
+        throw new Error('AI analysis not available – no result');
       }
 
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
-        const text = await response.text();
-        throw new Error(`Server returned unexpected response (status ${response.status}). The service might be starting up.`);
+        throw new Error('AI analysis not available – no result');
       }
 
       const data = await response.json();
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Server-side AI analysis failed');
+      if (!data.success || !data.analysis) {
+        throw new Error('AI analysis not available – no result');
       }
 
-      if (data.analysis) {
-        const result: AIAnalysisResult = {
-          id: 'ai-' + Date.now(),
-          timestamp: new Date().toISOString(),
-          riskLevel: data.analysis.riskLevel,
-          confidence: data.analysis.confidence,
-          observedFeatures: data.analysis.observedFeatures,
-          plainLanguageExplanation: data.analysis.plainLanguageExplanation,
-          clinicalConsiderations: data.analysis.clinicalConsiderations,
-          recommendedFollowUpMonths: data.analysis.recommendedFollowUpMonths || 3,
-          disclaimer:
-            data.analysis.disclaimer ||
-            'SkinRing is a documentation and triage-support tool, NOT a diagnostic device. Final evaluation rests with a qualified healthcare provider.',
-        };
-        setAnalysisResult(result);
-      }
+      const result: AIAnalysisResult = {
+        id: 'ai-' + Date.now(),
+        timestamp: new Date().toISOString(),
+        riskLevel: data.analysis.riskLevel,
+        confidence: data.analysis.confidence,
+        observedFeatures: data.analysis.observedFeatures,
+        plainLanguageExplanation: data.analysis.plainLanguageExplanation,
+        clinicalConsiderations: data.analysis.clinicalConsiderations,
+        recommendedFollowUpMonths: data.analysis.recommendedFollowUpMonths || 3,
+        disclaimer:
+          data.analysis.disclaimer ||
+          'SkinRing is a documentation and triage-support tool, NOT a diagnostic device. Final evaluation rests with a qualified healthcare provider.',
+      };
+      setAnalysisResult(result);
     } catch (err: any) {
       console.error('AI analysis error:', err);
-      setError(err.message || 'Could not complete AI analysis.');
+      setAnalysisResult(null);
+      setError('AI analysis not available – no result');
     } finally {
       setIsLoading(false);
     }
@@ -182,8 +184,10 @@ export const AIAnalysisModal: React.FC<AIAnalysisModalProps> = ({
           ) : error ? (
             <div className="p-6 rounded-2xl bg-slate-800/80 border border-slate-700 text-center space-y-3">
               <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto" />
-              <h4 className="text-sm font-bold text-white">AI Analysis Notice</h4>
-              <p className="text-xs text-slate-300 leading-relaxed">{error}</p>
+              <h4 className="text-sm font-bold text-white">AI analysis not available – no result</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                AI evaluation is currently unavailable. No risk level, score, or text generated.
+              </p>
               <button
                 onClick={runAnalysis}
                 className="py-2 px-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-xs font-semibold text-white shadow-md transition"
