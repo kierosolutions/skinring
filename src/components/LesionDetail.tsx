@@ -185,7 +185,7 @@ export const LesionDetail: React.FC<LesionDetailProps> = ({
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>Gemini AI Morphological Triage</span>
+                  <span>Claude AI Morphological Triage</span>
                   <span className={`text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full ${
                     latestPhoto.aiAnalysis.riskLevel === 'urgent review'
                       ? 'bg-rose-950 text-rose-300 border border-rose-800'

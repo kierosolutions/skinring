@@ -12,7 +12,7 @@ SkinRing is a mobile web app (PWA) for documenting skin lesions over time:
 - **Measurement from the ring** – the ring is detected in the photo and used as a scale (mm per pixel); the lesion is outlined and its diameter and area are measured.
 - **Body map and history** – lesions are placed on a body map and photographed again at intervals, so changes can be compared side by side.
 - **Checklists** – ABCDE rule, 7-point checklist and the "ugly duckling" comparison as structured aids.
-- **Optional AI triage** – a Gemini-based analysis via the server (only when an API key is configured).
+- **Optional AI triage** – a Claude (Anthropic, Claude Opus 5.5) analysis via the server (only when an API key is configured).
 - **Local and encrypted** – data is stored on the device; PDF export for a doctor's visit.
 
 ## Status
@@ -24,5 +24,5 @@ Early prototype, generated with Google AI Studio and under active review. Known 
 Prerequisites: Node.js
 
 1. Install dependencies: `npm install`
-2. Copy `.env.example` to `.env.local` and set `GEMINI_API_KEY` (only needed for the AI triage)
+2. Copy `.env.example` to `.env.local` and set `ANTHROPIC_API_KEY` (only needed for the AI triage)
 3. Start: `npm run dev`

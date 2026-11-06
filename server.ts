@@ -1,6 +1,8 @@
 import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
-import { GoogleGenAI, Type } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
+import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+import { z } from 'zod';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -18,11 +20,40 @@ app.use(express.json({ limit: '30mb' }));
 // Dedicated API router to guarantee all /api endpoints are handled before static/Vite fallbacks
 const apiRouter = express.Router();
 
+// Claude Opus 5.5 reads the lesion photos and returns the triage as structured JSON.
+const CLAUDE_MODEL = 'claude-opus-5-5';
+const anthropic = new Anthropic(); // reads ANTHROPIC_API_KEY from the environment
+
+const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
+type SupportedImageType = (typeof SUPPORTED_IMAGE_TYPES)[number];
+
+class UnsupportedImageError extends Error {
+  constructor(mimeType: string) {
+    super(`Unsupported image type ${mimeType}; use JPEG, PNG, GIF or WebP`);
+  }
+}
+
+const LesionAnalysisSchema = z.object({
+  observedFeatures: z.object({
+    asymmetry: z.string().describe('Symmetry or asymmetry across perpendicular axes (symmetric, mild asymmetry, marked asymmetry).'),
+    borderIrregularity: z.string().describe('Border definition, sharp cutoffs, notched or scalloped contours.'),
+    colorVariation: z.string().describe('Colors observed (e.g., uniform light brown, dark brown, black, blue-gray, red, hypopigmentation).'),
+    diameterEstimateMm: z.number().describe('Estimated greatest diameter of the lesion in millimeters.'),
+    changeSinceLastVisit: z.string().describe('Comparison assessment if baseline was provided (stable, enlarged, altered pigment, or initial baseline).'),
+  }),
+  riskLevel: z.enum(['low', 'review', 'urgent review']),
+  confidence: z.number().describe('Confidence percentage from 0 to 100 based on image clarity, lighting and visibility.'),
+  plainLanguageExplanation: z.string().describe('Clear, compassionate explanation for provider and patient explaining visible characteristics without medical diagnostic labels.'),
+  clinicalConsiderations: z.string().describe('Practical clinical notes, e.g., recommend dermoscopy, palpation, 3-month follow-up, or urgent specialist referral.'),
+  recommendedFollowUpMonths: z.number().int().describe('Suggested follow-up interval in months (e.g. 1 for urgent review, 3 for monitoring, 6 or 12 for routine low risk).'),
+  disclaimer: z.string().describe('Mandatory non-diagnostic disclaimer.'),
+});
+
 apiRouter.get('/health', (_req: Request, res: Response) => {
   return res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    hasApiKey: !!process.env.GEMINI_API_KEY,
+    hasApiKey: !!process.env.ANTHROPIC_API_KEY,
   });
 });
 
@@ -57,48 +88,42 @@ apiRouter.post('/analyze-lesion', async (req: Request, res: Response) => {
       };
     };
 
-    // If GEMINI_API_KEY is available in the environment, call Google Gemini Vision API
-    if (process.env.GEMINI_API_KEY) {
-      try {
-        const ai = new GoogleGenAI({
-          apiKey: process.env.GEMINI_API_KEY,
-          httpOptions: {
-            headers: {
-              'User-Agent': 'aistudio-build',
-            },
-          },
-        });
+    // AI triage runs only when ANTHROPIC_API_KEY is configured. There is no fallback result:
+    // without a key, or if Claude fails or declines, the client gets 503 and shows "AI analysis not available".
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({
+        error: 'AI analysis unavailable',
+      });
+    }
 
-        const currentImgPart = extractImageParts(currentImage);
-        const parts: any[] = [
-          {
-            inlineData: {
-              mimeType: currentImgPart.mimeType,
-              data: currentImgPart.data,
-            },
-          },
-        ];
-
-        let comparisonPrompt = '';
-        if (baselineImage) {
-          const baselineImgPart = extractImageParts(baselineImage);
-          parts.push({
-            inlineData: {
-              mimeType: baselineImgPart.mimeType,
-              data: baselineImgPart.data,
-            },
-          });
-          comparisonPrompt = 'Two images are provided. Image 1 is the CURRENT visit photo. Image 2 is the BASELINE/PREVIOUS visit photo. Perform comparative lesion morphology analysis to evaluate evolution.';
+    try {
+      const toImageBlock = (dataUri: string): Anthropic.Beta.BetaImageBlockParam => {
+        const { mimeType, data } = extractImageParts(dataUri);
+        if (!SUPPORTED_IMAGE_TYPES.includes(mimeType as SupportedImageType)) {
+          throw new UnsupportedImageError(mimeType);
         }
+        return {
+          type: 'image',
+          source: { type: 'base64', media_type: mimeType as SupportedImageType, data },
+        };
+      };
 
-        const langInstruction =
-          language === 'es'
-            ? 'Please write the plainLanguageExplanation and clinicalConsiderations in Spanish.'
-            : language === 'de'
-            ? 'Please write the plainLanguageExplanation and clinicalConsiderations in German.'
-            : 'Please write the plainLanguageExplanation and clinicalConsiderations in English.';
+      const content: Anthropic.Beta.BetaContentBlockParam[] = [toImageBlock(currentImage)];
 
-        const systemInstruction = `You are an AI-assisted dermoscopy and skin-lesion documentation and triage-support tool called SkinRing.
+      let comparisonPrompt = '';
+      if (baselineImage) {
+        content.push(toImageBlock(baselineImage));
+        comparisonPrompt = 'Two images are provided. Image 1 is the CURRENT visit photo. Image 2 is the BASELINE/PREVIOUS visit photo. Perform comparative lesion morphology analysis to evaluate evolution.';
+      }
+
+      const langInstruction =
+        language === 'es'
+          ? 'Please write the plainLanguageExplanation and clinicalConsiderations in Spanish.'
+          : language === 'de'
+          ? 'Please write the plainLanguageExplanation and clinicalConsiderations in German.'
+          : 'Please write the plainLanguageExplanation and clinicalConsiderations in English.';
+
+      const systemInstruction = `You are an AI-assisted dermoscopy and skin-lesion documentation and triage-support tool called SkinRing.
 SkinRing is strictly a documentation and triage-support aid, NOT a diagnostic medical device.
 CRITICAL MANDATORY RULES:
 1. NEVER declare or state a medical diagnosis (e.g., do NOT state "This is melanoma" or "This is seborrheic keratosis").
@@ -110,108 +135,59 @@ CRITICAL MANDATORY RULES:
 4. Always emphasize that final assessment, dermatoscope examination, and histopathological correlation rest solely with a qualified healthcare provider.
 5. ${langInstruction}`;
 
-        const contextSummary = lesionContext
-          ? `Lesion Details:\n- Anatomical location: ${lesionContext.anatomicalLocation || 'Not specified'}\n- Measured ring calibration scale: ${lesionContext.mmPerPixel ? `${Number(lesionContext.mmPerPixel).toFixed(4)} mm/px` : 'Not available'}\n- Calibrated ring inner diameter: ${lesionContext.ringDiameterMm || 30} mm\n- Patient Fitzpatrick skin type: ${lesionContext.fitzpatrickType || 'Not specified'}\n- Risk factors: ${lesionContext.riskFactors ? JSON.stringify(lesionContext.riskFactors) : 'None reported'}\n- ABCDE observations: ${lesionContext.abcde ? JSON.stringify(lesionContext.abcde) : 'None'}`
-          : 'No patient context provided.';
+      const contextSummary = lesionContext
+        ? `Lesion Details:\n- Anatomical location: ${lesionContext.anatomicalLocation || 'Not specified'}\n- Measured ring calibration scale: ${lesionContext.mmPerPixel ? `${Number(lesionContext.mmPerPixel).toFixed(4)} mm/px` : 'Not available'}\n- Calibrated ring inner diameter: ${lesionContext.ringDiameterMm || 30} mm\n- Patient Fitzpatrick skin type: ${lesionContext.fitzpatrickType || 'Not specified'}\n- Risk factors: ${lesionContext.riskFactors ? JSON.stringify(lesionContext.riskFactors) : 'None reported'}\n- ABCDE observations: ${lesionContext.abcde ? JSON.stringify(lesionContext.abcde) : 'None'}`
+        : 'No patient context provided.';
 
-        const promptText = `${comparisonPrompt}\n\n${contextSummary}\n\nEvaluate the lesion image(s) captured with the SkinRing standardized spacer. Assess morphological asymmetry, border regularity, color distribution, diameter estimate in mm, and structural change if baseline is provided. Output strictly valid JSON adhering to the response schema.`;
+      const promptText = `${comparisonPrompt}\n\n${contextSummary}\n\nEvaluate the lesion image(s) captured with the SkinRing standardized spacer. Assess morphological asymmetry, border regularity, color distribution, diameter estimate in mm, and structural change if baseline is provided. Output strictly valid JSON adhering to the response schema.`;
 
-        parts.push({ text: promptText });
+      content.push({ type: 'text', text: promptText });
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: { parts },
-          config: {
-            systemInstruction,
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                observedFeatures: {
-                  type: Type.OBJECT,
-                  properties: {
-                    asymmetry: {
-                      type: Type.STRING,
-                      description: 'Symmetry or asymmetry across perpendicular axes (symmetric, mild asymmetry, marked asymmetry).',
-                    },
-                    borderIrregularity: {
-                      type: Type.STRING,
-                      description: 'Border definition, sharp cutoffs, notched or scalloped contours.',
-                    },
-                    colorVariation: {
-                      type: Type.STRING,
-                      description: 'Colors observed (e.g., uniform light brown, dark brown, black, blue-gray, red, hypopigmentation).',
-                    },
-                    diameterEstimateMm: {
-                      type: Type.NUMBER,
-                      description: 'Estimated greatest diameter of the lesion in millimeters.',
-                    },
-                    changeSinceLastVisit: {
-                      type: Type.STRING,
-                      description: 'Comparison assessment if baseline was provided (stable, enlarged, altered pigment, or initial baseline).',
-                    },
-                  },
-                  required: ['asymmetry', 'borderIrregularity', 'colorVariation', 'diameterEstimateMm', 'changeSinceLastVisit'],
-                },
-                riskLevel: {
-                  type: Type.STRING,
-                  description: 'Must be low, review, or urgent review',
-                },
-                confidence: {
-                  type: Type.NUMBER,
-                  description: 'Confidence percentage from 0 to 100 based on image clarity, lighting and visibility.',
-                },
-                plainLanguageExplanation: {
-                  type: Type.STRING,
-                  description: 'Clear, compassionate explanation for provider and patient explaining visible characteristics without medical diagnostic labels.',
-                },
-                clinicalConsiderations: {
-                  type: Type.STRING,
-                  description: 'Practical clinical notes, e.g., recommend dermoscopy, palpation, 3-month follow-up, or urgent specialist referral.',
-                },
-                recommendedFollowUpMonths: {
-                  type: Type.INTEGER,
-                  description: 'Suggested follow-up interval in months (e.g. 1 for urgent review, 3 for monitoring, 6 or 12 for routine low risk).',
-                },
-                disclaimer: {
-                  type: Type.STRING,
-                  description: 'Mandatory non-diagnostic disclaimer.',
-                },
-              },
-              required: [
-                'observedFeatures',
-                'riskLevel',
-                'confidence',
-                'plainLanguageExplanation',
-                'clinicalConsiderations',
-                'recommendedFollowUpMonths',
-                'disclaimer',
-              ],
-            },
-          },
-        });
+      const response = await anthropic.beta.messages.parse({
+        model: CLAUDE_MODEL,
+        max_tokens: 16000,
+        system: systemInstruction,
+        messages: [{ role: 'user', content }],
+        output_config: {
+          effort: 'high',
+          format: betaZodOutputFormat(LesionAnalysisSchema),
+        },
+        // If a safety classifier declines, Anthropic re-runs the request on its recommended fallback model.
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+      });
 
-        const text = response.text || '{}';
-        const parsedData = JSON.parse(text);
-
-        return res.json({
-          success: true,
-          analysis: parsedData,
-          analyzedAt: new Date().toISOString(),
-          model: 'gemini-3.8-flash',
-        });
-      } catch (geminiError: any) {
-        console.warn('Gemini API call failed:', geminiError?.message || geminiError);
+      if (response.stop_reason === 'refusal') {
+        console.warn('Claude declined the lesion analysis:', response.stop_details?.category ?? 'no category');
         return res.status(503).json({
           error: 'AI analysis unavailable',
         });
       }
-    }
+      if (!response.parsed_output) {
+        console.warn('Claude returned no parseable analysis, stop_reason:', response.stop_reason);
+        return res.status(503).json({
+          error: 'AI analysis unavailable',
+        });
+      }
 
-    // If GEMINI_API_KEY is not configured, return 503
-    return res.status(503).json({
-      error: 'AI analysis unavailable',
-    });
+      return res.json({
+        success: true,
+        analysis: response.parsed_output,
+        analyzedAt: new Date().toISOString(),
+        model: response.model,
+      });
+    } catch (claudeError: any) {
+      if (claudeError instanceof UnsupportedImageError) {
+        return res.status(400).json({
+          success: false,
+          error: claudeError.message,
+        });
+      }
+      console.warn('Claude API call failed:', claudeError?.message || claudeError);
+      return res.status(503).json({
+        error: 'AI analysis unavailable',
+      });
+    }
   } catch (error: any) {
     console.error('Error in /api/analyze-lesion:', error);
     return res.status(400).json({

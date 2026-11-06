@@ -77,7 +77,7 @@ export const translations = {
     lesionTimeline: 'Photo Evolution Timeline',
     capturedOn: 'Captured on {date} by {name}',
     compareVisits: 'Compare Visits',
-    aiAnalysisBtn: 'Analyze with Gemini AI',
+    aiAnalysisBtn: 'Analyze with Claude AI',
     exportPdfBtn: 'Export Clinical PDF',
     checklistsBtn: 'ABCDE & 7-Point Score',
 
@@ -117,7 +117,7 @@ export const translations = {
     scoreInterpretationLow: 'Score < 3: Low dermoscopic score. Continue scheduled monitoring.',
 
     // AI Analysis
-    aiAnalysisTitle: 'Gemini AI Morphological Analysis',
+    aiAnalysisTitle: 'Claude AI Morphological Analysis',
     aiDisclaimerNote: 'Assistance tool only. Not a medical diagnosis.',
     riskLow: 'Low Risk',
     riskReview: 'Review Recommended',
@@ -238,7 +238,7 @@ export const translations = {
     lesionTimeline: 'Línea de Evolución Fotográfica',
     capturedOn: 'Capturada el {date} por {name}',
     compareVisits: 'Comparar Consultas',
-    aiAnalysisBtn: 'Analizar con Gemini IA',
+    aiAnalysisBtn: 'Analizar con Claude IA',
     exportPdfBtn: 'Exportar PDF Clínico',
     checklistsBtn: 'Criterios ABCDE y 7 Puntos',
 
@@ -278,7 +278,7 @@ export const translations = {
     scoreInterpretationLow: 'Puntaje < 3: Bajo puntaje dermatoscópico. Mantener seguimiento programado.',
 
     // AI Analysis
-    aiAnalysisTitle: 'Análisis Morfológico Asistido por IA Gemini',
+    aiAnalysisTitle: 'Análisis Morfológico Asistido por IA Claude',
     aiDisclaimerNote: 'Herramienta de asistencia. No es diagnóstico médico.',
     riskLow: 'Riesgo Bajo',
     riskReview: 'Revisión Recomendada',
@@ -399,7 +399,7 @@ export const translations = {
     lesionTimeline: 'Fotoverlauf-Zeitleiste',
     capturedOn: 'Aufgenommen am {date} von {name}',
     compareVisits: 'Termine vergleichen',
-    aiAnalysisBtn: 'Mit Gemini KI analysieren',
+    aiAnalysisBtn: 'Mit Claude KI analysieren',
     exportPdfBtn: 'Klinischen PDF-Bericht erstellen',
     checklistsBtn: 'ABCDE & 7-Punkte-Checkliste',
 
@@ -439,7 +439,7 @@ export const translations = {
     scoreInterpretationLow: 'Score < 3: Niedriger dermatoskopischer Score. Weiterhin geplante Verlaufskontrolle.',
 
     // AI Analysis
-    aiAnalysisTitle: 'Gemini KI-Morphologie-Analyse',
+    aiAnalysisTitle: 'Claude KI-Morphologie-Analyse',
     aiDisclaimerNote: 'Reines Assistenzwerkzeug. Keine ärztliche Diagnose.',
     riskLow: 'Niedriges Risiko',
     riskReview: 'Kontrolle empfohlen',

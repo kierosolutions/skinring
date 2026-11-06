@@ -198,7 +198,7 @@ export function generateClinicalPdfReport(
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.5);
     doc.setTextColor(15, 118, 110); // teal-700
-    doc.text(`GEMINI AI MORPHOLOGICAL TRIAGE (Risk Level: ${ai.riskLevel.toUpperCase()} | Confidence: ${ai.confidence}%)`, margin + 3, y + 4.5);
+    doc.text(`CLAUDE AI MORPHOLOGICAL TRIAGE (Risk Level: ${ai.riskLevel.toUpperCase()} | Confidence: ${ai.confidence}%)`, margin + 3, y + 4.5);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.2);

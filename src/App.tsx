@@ -629,7 +629,7 @@ export default function App() {
         />
       )}
 
-      {/* Gemini AI Morphological Triage Modal */}
+      {/* Claude AI Morphological Triage Modal */}
       {showAIModal && activePatient && activeLesion && aiAnalysisPhotos && (
         <AIAnalysisModal
           language={settings.language}

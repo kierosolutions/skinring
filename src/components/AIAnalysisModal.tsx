@@ -137,7 +137,7 @@ export const AIAnalysisModal: React.FC<AIAnalysisModalProps> = ({
             </div>
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                <span>Gemini 3.8 Flash Vision Triage</span>
+                <span>Claude Opus 5.5 Vision Triage</span>
               </h3>
               <p className="text-xs text-slate-300">
                 Lesion #{lesion.number} ({lesion.name}) • {baselinePhoto ? 'Comparative Analysis (Baseline + Current)' : 'Single Visit Morphology'}
