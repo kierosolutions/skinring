@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="url(#bg)" />
+  
+  <!-- Center Glow -->
+  <circle cx="256" cy="256" r="140" fill="#3b82f6" opacity="0.08" />
+  
+  <!-- Outer Calibrated Ring -->
+  <circle cx="256" cy="256" r="150" fill="none" stroke="url(#ringGrad)" stroke-width="20" stroke-linecap="round" />
+  <circle cx="256" cy="256" r="120" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4,8" opacity="0.6" />
+  
+  <!-- Calibration Ticks -->
+  <g stroke="#94a3b8" stroke-width="3" stroke-linecap="round">
+    <!-- 12 o'clock orientation notch (special distinct marker) -->
+    <line x1="256" y1="88" x2="256" y2="114" stroke="#f43f5e" stroke-width="8" />
+    <!-- 3, 6, 9 o'clock -->
+    <line x1="398" y1="256" x2="424" y2="256" stroke="#38bdf8" stroke-width="5" />
+    <line x1="256" y1="398" x2="256" y2="424" stroke="#38bdf8" stroke-width="5" />
+    <line x1="88" y1="256" x2="114" y2="256" stroke="#38bdf8" stroke-width="5" />
+    <!-- 45-degree ticks -->
+    <line x1="356" y1="156" x2="372" y2="140" />
+    <line x1="356" y1="356" x2="372" y2="372" />
+    <line x1="156" y1="356" x2="140" y2="372" />
+    <line x1="156" y1="156" x2="140" y2="140" />
+  </g>
+
+  <!-- Reference grey/white calibration patch on right border -->
+  <rect x="368" y="240" width="16" height="32" rx="2" fill="#ffffff" stroke="#94a3b8" stroke-width="1" />
+  <rect x="384" y="240" width="16" height="32" rx="2" fill="#9ca3af" stroke="#64748b" stroke-width="1" />
+
+  <!-- Central reticle / lesion crosshair guide -->
+  <circle cx="256" cy="256" r="14" fill="#38bdf8" opacity="0.9" />
+  <circle cx="256" cy="256" r="28" fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.4" />
+</svg>

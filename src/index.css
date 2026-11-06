@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+:root {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+html, body {
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure minimum touch target sizes and comfortable mobile reading */
+button, select, input, textarea {
+  font-size: 0.9375rem; /* ~15px minimum for inputs to prevent iOS zoom & tiny text */
+}
+
+@media (max-width: 640px) {
+  :root {
+    font-size: 16px;
+  }
+}

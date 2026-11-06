@@ -1,0 +1,10 @@
+{
+  "name": "SkinRing",
+  "description": "Mobile-first skin-lesion documentation and change tracking PWA with 3D-printed clip-on ring calibration and AI triage support.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
