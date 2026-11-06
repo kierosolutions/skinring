@@ -111,7 +111,7 @@ export const ChangeComparison: React.FC<ChangeComparisonProps> = ({
           <span>{t.comparisonTitle}</span>
         </h2>
         <p className="text-xs sm:text-sm text-slate-400 mt-1">
-          Calibrated cross-visit alignment via 30mm SkinRing geometry &amp; 12 o&apos;clock orientation notch
+          Calibrated cross-visit alignment via the SkinRing ring geometry &amp; 12 o&apos;clock orientation notch
         </p>
       </div>
 

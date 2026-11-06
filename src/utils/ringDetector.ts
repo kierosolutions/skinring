@@ -56,13 +56,16 @@ function rgbToLab(r: number, g: number, b: number): [number, number, number] {
   return [L, a, bVal];
 }
 
+/** Inner diameter of the printed SkinRing gadget's skin ring (hardware/frame.stl). */
+export const DEFAULT_RING_INNER_DIAMETER_MM = 50;
+
 /**
  * Detect ring in a canvas element or image data.
  * Works on downscaled preview frames (fast) or full-resolution capture frames.
  */
 export function analyzeRingAndLesion(
   sourceCanvas: HTMLCanvasElement,
-  configuredRingMm: number = 30
+  configuredRingMm: number = DEFAULT_RING_INNER_DIAMETER_MM
 ): RingDetectionResult {
   const width = sourceCanvas.width;
   const height = sourceCanvas.height;

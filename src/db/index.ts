@@ -2,6 +2,10 @@ import { openDB, IDBPDatabase } from 'idb';
 import { Patient, Lesion, LesionPhoto, AppSettings } from '../types';
 import { generateSampleLesionCanvas } from './sampleData';
 import { calculateSha256 } from '../utils/crypto';
+import { DEFAULT_RING_INNER_DIAMETER_MM } from '../utils/ringDetector';
+
+// The prototype's first default before the printed gadget existed.
+const LEGACY_RING_INNER_DIAMETER_MM = 30;
 
 const DB_NAME = 'skinring_clinical_db';
 const DB_VERSION = 1;
@@ -43,8 +47,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     role: '',
   },
   ringSettings: {
-    ringInnerDiameterMm: 30,
-    armLengthMm: 35,
+    ringInnerDiameterMm: DEFAULT_RING_INNER_DIAMETER_MM,
+    armLengthMm: 80,
     phoneLensPreset: 'normal',
     autoCapture: true,
     glareSensitivity: 'standard',
@@ -60,9 +64,15 @@ export async function getSettings(): Promise<AppSettings> {
     await db.put('settings', DEFAULT_SETTINGS, 'appSettings');
     return DEFAULT_SETTINGS;
   }
+  // Settings saved before the 50 mm gadget still carry the old 30 mm placeholder ring; move them to the real ring.
+  const ringSettings =
+    settings.ringSettings?.ringInnerDiameterMm === LEGACY_RING_INNER_DIAMETER_MM
+      ? { ...settings.ringSettings, ringInnerDiameterMm: DEFAULT_RING_INNER_DIAMETER_MM, armLengthMm: 80 }
+      : settings.ringSettings;
   return {
     ...DEFAULT_SETTINGS,
     ...settings,
+    ringSettings: ringSettings || DEFAULT_SETTINGS.ringSettings,
     userProfile: settings.userProfile || DEFAULT_SETTINGS.userProfile,
   };
 }

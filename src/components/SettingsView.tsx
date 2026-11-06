@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AppSettings, RingSettings, Language } from '../types';
 import { getTranslation } from '../i18n/translations';
+import { DEFAULT_RING_INNER_DIAMETER_MM } from '../utils/ringDetector';
 import {
   Settings,
   Sliders,
@@ -36,10 +37,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const t = getTranslation(language);
 
   const [ringInnerDiameter, setRingInnerDiameter] = useState<number>(
-    settings.ringSettings.ringInnerDiameterMm || 30
+    settings.ringSettings.ringInnerDiameterMm || DEFAULT_RING_INNER_DIAMETER_MM
   );
   const [armLength, setArmLength] = useState<number>(
-    settings.ringSettings.armLengthMm || 35
+    settings.ringSettings.armLengthMm || 80
   );
   const [phoneLensPreset, setPhoneLensPreset] = useState<'normal' | 'macro' | 'ultra-wide'>(
     settings.ringSettings.phoneLensPreset || 'normal'
@@ -152,7 +153,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input
                 type="range"
                 min={20}
-                max={45}
+                max={70}
                 step={1}
                 value={ringInnerDiameter}
                 onChange={(e) => setRingInnerDiameter(parseInt(e.target.value, 10))}
@@ -163,7 +164,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </span>
             </div>
             <span className="text-xs text-slate-400 mt-1 block">
-              Default 30 mm (Standard dermoscopy ring size)
+              Default 50 mm (SkinRing gadget ring opening)
             </span>
           </div>
 
@@ -175,7 +176,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input
                 type="range"
                 min={20}
-                max={60}
+                max={150}
                 step={1}
                 value={armLength}
                 onChange={(e) => setArmLength(parseInt(e.target.value, 10))}

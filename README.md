@@ -8,7 +8,7 @@
 
 SkinRing is a mobile web app (PWA) for documenting skin lesions over time:
 
-- **Camera capture with the SkinRing spacer** – a ring placed on the skin keeps the same distance on every photo; the app turns on the phone's flashlight for similar lighting (it asks for camera access).
+- **Camera capture with the SkinRing spacer** – a ring placed on the skin keeps the same distance on every photo; the app turns on the phone's flashlight for similar lighting (it asks for camera access). The 3D-printable gadget (50 mm ring, 80 mm lens-to-skin, universal phone cradle) is in [`hardware/`](hardware/).
 - **Measurement from the ring** – the ring is detected in the photo and used as a scale (mm per pixel); the lesion is outlined and its diameter and area are measured.
 - **Body map and history** – lesions are placed on a body map and photographed again at intervals, so changes can be compared side by side.
 - **Checklists** – ABCDE rule, 7-point checklist and the "ugly duckling" comparison as structured aids.

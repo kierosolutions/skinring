@@ -184,7 +184,7 @@ const PatientMatrixContent: React.FC<PatientMatrixContentProps> = ({
                 {/* Calibrated Ring Scale Watermark */}
                 {latestPhoto?.ringDetected && (
                   <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-md bg-slate-900/85 backdrop-blur-md text-xs text-cyan-300 font-mono font-medium">
-                    30mm Ring ({latestPhoto.diameterMmEstimate ? `${latestPhoto.diameterMmEstimate.toFixed(1)}mm` : 'Scale'})
+                    {latestPhoto.ringDiameterMm}mm Ring ({latestPhoto.diameterMmEstimate ? `${latestPhoto.diameterMmEstimate.toFixed(1)}mm` : 'Scale'})
                   </div>
                 )}
               </div>

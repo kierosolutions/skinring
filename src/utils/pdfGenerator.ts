@@ -150,7 +150,7 @@ export function generateClinicalPdfReport(
     doc.setFontSize(6.5);
     doc.setTextColor(71, 85, 105);
     doc.text(
-      `Ring: ${photo.ringDetected ? `30mm Calibrated (${(photo.mmPerPixel || 0.06).toFixed(3)} mm/px)` : 'Uncalibrated'} | Torch: ${photo.torchOn ? 'ON' : 'OFF'}`,
+      `Ring: ${photo.ringDetected ? `${photo.ringDiameterMm}mm Calibrated (${(photo.mmPerPixel || 0.06).toFixed(3)} mm/px)` : 'Uncalibrated'} | Torch: ${photo.torchOn ? 'ON' : 'OFF'}`,
       px + 2,
       y + photoHeight + 7.5
     );

@@ -7,6 +7,7 @@ import {
   analyzeRingAndLesion,
   applyCalibrationTransform,
   RingDetectionResult,
+  DEFAULT_RING_INNER_DIAMETER_MM,
 } from '../utils/ringDetector';
 import {
   Camera,
@@ -189,7 +190,7 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
         // Run real computer-vision analysis on the frame
         const cvResult: RingDetectionResult = analyzeRingAndLesion(
           canvas,
-          ringSettings.ringInnerDiameterMm || 30
+          ringSettings.ringInnerDiameterMm || DEFAULT_RING_INNER_DIAMETER_MM
         );
 
         setLiveRingDetected(cvResult.ringDetected);
@@ -284,7 +285,8 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
       asymmetry: 0.35,
       irregularBorder: true,
       colorVariegated: true,
-      timestampText: `CALIBRATED ${ringSettings.ringInnerDiameterMm || 30}mm - ${new Date().toLocaleDateString()}`,
+      ringMm: ringSettings.ringInnerDiameterMm || DEFAULT_RING_INNER_DIAMETER_MM,
+      timestampText: `CALIBRATED ${ringSettings.ringInnerDiameterMm || DEFAULT_RING_INNER_DIAMETER_MM}mm - ${new Date().toLocaleDateString()}`,
     });
 
     const img = new Image();
@@ -332,7 +334,7 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
     attemptRingCalibration: boolean,
     isSampleDemo: boolean = false
   ) => {
-    const configuredRingMm = ringSettings.ringInnerDiameterMm || 30;
+    const configuredRingMm = ringSettings.ringInnerDiameterMm || DEFAULT_RING_INNER_DIAMETER_MM;
 
     // Run real computer vision analysis on the high-res canvas
     const cvResult: RingDetectionResult = attemptRingCalibration
@@ -406,7 +408,7 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
       isDemo: isSampleDemo,
       sha256: sha256,
       notes: cvResult.ringDetected
-        ? `Calibrated 30mm SkinRing capture. Ring diameter: ${cvResult.measuredDiameterPx}px (${cvResult.mmPerPixel?.toFixed(4)} mm/px). Notch aligned by ${cvResult.rotationAngleDeg}°.`
+        ? `Calibrated ${configuredRingMm}mm SkinRing capture. Ring diameter: ${cvResult.measuredDiameterPx}px (${cvResult.mmPerPixel?.toFixed(4)} mm/px). Notch aligned by ${cvResult.rotationAngleDeg}°.`
         : 'Uncalibrated capture: Ring was not detected in image. Scale and cross-visit alignment unavailable.',
     };
 

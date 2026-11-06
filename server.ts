@@ -136,7 +136,7 @@ CRITICAL MANDATORY RULES:
 5. ${langInstruction}`;
 
       const contextSummary = lesionContext
-        ? `Lesion Details:\n- Anatomical location: ${lesionContext.anatomicalLocation || 'Not specified'}\n- Measured ring calibration scale: ${lesionContext.mmPerPixel ? `${Number(lesionContext.mmPerPixel).toFixed(4)} mm/px` : 'Not available'}\n- Calibrated ring inner diameter: ${lesionContext.ringDiameterMm || 30} mm\n- Patient Fitzpatrick skin type: ${lesionContext.fitzpatrickType || 'Not specified'}\n- Risk factors: ${lesionContext.riskFactors ? JSON.stringify(lesionContext.riskFactors) : 'None reported'}\n- ABCDE observations: ${lesionContext.abcde ? JSON.stringify(lesionContext.abcde) : 'None'}`
+        ? `Lesion Details:\n- Anatomical location: ${lesionContext.anatomicalLocation || 'Not specified'}\n- Measured ring calibration scale: ${lesionContext.mmPerPixel ? `${Number(lesionContext.mmPerPixel).toFixed(4)} mm/px` : 'Not available'}\n- Calibrated ring inner diameter: ${lesionContext.ringDiameterMm ? `${lesionContext.ringDiameterMm} mm` : 'Not available'}\n- Patient Fitzpatrick skin type: ${lesionContext.fitzpatrickType || 'Not specified'}\n- Risk factors: ${lesionContext.riskFactors ? JSON.stringify(lesionContext.riskFactors) : 'None reported'}\n- ABCDE observations: ${lesionContext.abcde ? JSON.stringify(lesionContext.abcde) : 'None'}`
         : 'No patient context provided.';
 
       const promptText = `${comparisonPrompt}\n\n${contextSummary}\n\nEvaluate the lesion image(s) captured with the SkinRing standardized spacer. Assess morphological asymmetry, border regularity, color distribution, diameter estimate in mm, and structural change if baseline is provided. Output strictly valid JSON adhering to the response schema.`;
